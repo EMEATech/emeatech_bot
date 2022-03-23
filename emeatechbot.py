@@ -1,14 +1,5 @@
 import os
 from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
-import requests
-from datetime import datetime
-from datetime import timedelta
-from random import randint
-
-import pandas as pd
-import dataframe_image as dfi
-import numpy as np
-from functools import reduce
 import os
 
 TOKEN = os.getenv("EMEA_TELEGRAM_TOKEN")
