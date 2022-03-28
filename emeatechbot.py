@@ -1,8 +1,18 @@
-import os
-from telegram.ext import Updater, CommandHandler, MessageHandler, Filters
+from db import JobListing
+from pathlib import Path
 import os
 
+from db import JobBoardDbAirTable
+from telegram.ext import CommandHandler, Filters, MessageHandler, Updater
+
 TOKEN = os.getenv("EMEA_TELEGRAM_TOKEN")
+
+news_file_path = Path('news.md')
+
+job_file_path = Path('jobs.md')
+
+board = JobBoardDbAirTable()
+
 
 def start(update, context):
     context.bot.send_message(chat_id=update.effective_chat.id, text="Hi! I respond by echoing messages. Give it a try!")
@@ -11,9 +21,9 @@ def echo(update, context):
     text = update.message.text
     if text.startswith("n "):
         print("updating news")
-        with open("/home/tasks/emeatech.org/docs/news/index.md") as f:
+        with job_file_path.open('r') as f:
             existing = f.read()
-        with open("/home/tasks/emeatech.org/docs/news/index.md", "w") as f:
+        with job_file_path.open('w') as f:
             link = text[2:]
             bullet = f"* [{link}]({link})\n"
             replacetext = "<!-- replaceme -->"
@@ -25,14 +35,14 @@ def echo(update, context):
     elif text.startswith("j "):
         try:
 
-            with open("/home/tasks/emeatech.org/docs/jobs/index.md") as f:
+            with job_file_path.open('r') as f:
                 existing = f.read()
-            with open("/home/tasks/emeatech.org/docs/jobs/index.md", "w") as f:
+            with job_file_path.open('w') as f:
                 try:
-                    new_job = text[2:]
-                    new_job_description, company_description, new_job_link = new_job.split(";")
-                    existing = existing.replace("## Listings", f"## Listings\n\n * **{new_job_description}.** {company_description}. More information [here]({new_job_link}).")
+                    new_job = JobListing.from_txt(text[2:])
+                    existing = existing.replace("## Listings", f"## Listings\n\n * **{new_job.Description}.** {new_job.Description}. More information [here]({new_job.URL}).")
                     f.write(existing)
+                    board.create(new_job)
                     context.bot.send_message(chat_id=update.effective_chat.id, text="Posted your job. Thanks!")
                 except Exception as e:
                     print("Exception in writing new jobs")

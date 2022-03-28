@@ -3,8 +3,7 @@ import os
 from abc import ABC, abstractmethod
 from dataclasses import asdict, dataclass
 from typing import Optional
-
-import urllib3
+from urllib import request, parse
 
 
 @dataclass
@@ -20,10 +19,26 @@ class JobListing:
         EXAMPLE:
         >>> txt = 'Acme | rockstar ninja | $80k-$170k;Acme is a cool company that does cool things;https://example.com'
         >>> JobListing.from_txt(txt)
-        JobListing(Description='Acme | rockstar ninja | $80k-$170k', URL='https://example.com', Company=None, Position=None, Salary=None)
+        JobListing(Description='Acme | rockstar ninja | $80k-$170k', URL='https://example.com', Company='Acme', Position='rockstar ninja', Salary='$80k-$170k')
         """
         new_job_description, company_description, new_job_link = text_message.split(";")
-        return JobListing(Description=new_job_description, URL=new_job_link)
+        company, position, salary = new_job_description.split(' | ')
+        return JobListing(
+            Description=new_job_description, 
+            URL=new_job_link,
+            Company=company,
+            Position=position,
+            Salary=salary
+            )
+
+    def to_md(self)->str:
+        """
+        EXAMPLE:
+        >>> job = JobListing(Description='Acme | rockstar ninja | $80k-$170k', URL='https://example.com', Company='Acme', Position='rockstar ninja', Salary='$80k-$180k')
+        >>> job.to_md()
+        '* **Acme | rockstar ninja | $80k-$180k.** Acme | rockstar ninja | $80k-$170k https://example.com'
+        """
+        return f"* **{self.Company} | {self.Position} | {self.Salary}.** {self.Description} {self.URL}"
 
 
 
@@ -56,49 +71,46 @@ class JobBoardDbAirTable(JobBoardDbBase):
         self.url = "https://api.airtable.com/v0/appTgR7p7sKXHvip2/Table%201"
 
     def create(self, data:JobListing):
-        http = urllib3.PoolManager()
 
         body = {"records":[{"fields": asdict(data)}]}
 
-        # Sending a GET request and getting back response as HTTPResponse object.
-        resp = http.request(
-            "POST", 
+        req = request.Request(
             self.url,
-            body=json.dumps(body),
+            method='POST',
+            data=json.dumps(body).encode(),
             headers={
                 'Authorization': f'Bearer {self.key}',
                 'Content-Type': 'application/json',
                 }
             )
 
-        return json.loads(resp.data)
+        return json.loads(request.urlopen(req).read())
+        
 
     def read(self):
-        http = urllib3.PoolManager()
-
-        resp = http.request(
-            "GET", 
-            self.url,
-            headers={'Authorization': f'Bearer {self.key}'}
-            )
-        if resp.status == 200:
-            return resp.data
-        else:
-            raise Exception(resp.status)
+        try:
+            req = request.Request(
+                self.url,
+                headers={'Authorization': f'Bearer {self.key}'},
+                method='GET'
+                )
+            
+            return request.urlopen(req).read()
+        except:
+            raise Exception(resp)
 
     def update():
         raise NotImplementedError()
 
     def delete(self,row_id:str):
-        http = urllib3.PoolManager()
-
-        resp = http.request(
-            "DELETE", 
-            self.url,
-            fields={'records[]':row_id},
+        body = {'records[]':row_id}
+        req = request.Request(
+            f"{self.url}/?" + parse.urlencode(body),
+            method='DELETE',
             headers={'Authorization': f'Bearer {self.key}'}
             )
-        return json.loads(resp.data)
+        with request.urlopen(req) as response:
+            return json.loads(response.read())
 
 
 
@@ -111,11 +123,11 @@ if __name__ == "__main__":
     for job in jobs['records']:
         if job['fields']:
             fields = JobListing(**job['fields'])
-            print(f"* **{fields.Company} | {fields.Position} | {fields.Salary}.** {fields.Description} {fields.URL}")
+            print(fields.to_md())
 
     # create a new job
     new_job = board.create(
-        JobListing('Acme', 'XY', 'You should drink coffee all day.', '100kUSD', 'http://acme.com/recruiting')
+        JobListing(Description='You should drink coffee all day', Company='ACME', Position='ninja', Salary='$100k', URL='http://acme.com/recruiting')
         )
     print(new_job)
     # delete a job
